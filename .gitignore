@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+build/
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+secrets/
+credentials/

@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum InventoryTracking {
+  UNIQUE_PIECE
+  BULK
+}
+
+enum PieceStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  RETURNED
+  DAMAGED
+}
+
+enum StockMovementType {
+  OPENING
+  PURCHASE
+  SALE
+  SALE_RETURN
+  PURCHASE_RETURN
+  ADJUSTMENT
+  DAMAGE
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+// ==================== CATEGORY ====================
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(10)
+  name      String   @db.VarChar(100)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  varieties Variety[]
+  products  Product[]
+
+  @@map("categories")
+}
+
+// ==================== VARIETY ====================
+
+model Variety {
+  id         String   @id @default(uuid()) @db.Uuid
+  categoryId String   @db.Uuid
+  code       String   @db.VarChar(10)
+  name       String   @db.VarChar(100)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category Category  @relation(fields: [categoryId], references: [id])
+  products Product[]
+
+  @@unique([categoryId, code])
+  @@unique([categoryId, name])
+  @@map("varieties")
+}
+
+// ==================== PRODUCT ====================
+
+model Product {
+  id                  String            @id @default(uuid()) @db.Uuid
+  productCode         String            @unique @db.VarChar(50)
+  name                String            @db.VarChar(200)
+  description         String?
+  categoryId          String            @db.Uuid
+  varietyId           String            @db.Uuid
+  defaultSellingPrice Decimal           @db.Decimal(12, 2)
+  costPrice           Decimal?          @db.Decimal(12, 2)
+  gstRate             Decimal           @default(0) @db.Decimal(5, 2)
+  hsnCode             String?           @db.VarChar(20)
+  inventoryTracking   InventoryTracking @default(UNIQUE_PIECE)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+  variety  Variety  @relation(fields: [varietyId], references: [id])
+
+  purchaseOrderItems   PurchaseOrderItem[]
+  purchaseReceiptItems PurchaseReceiptItem[]
+  images               ProductImage[]
+  inventoryUnits       InventoryUnit[]
+  stockBatches         StockBatch[]
+  stockMovements       StockMovement[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([varietyId])
+  @@map("products")
+}
+
+// ==================== PRODUCT IMAGE ====================
+
+model ProductImage {
+  id           String   @id @default(uuid()) @db.Uuid
+  productId    String   @db.Uuid
+  publicId     String   @unique @db.VarChar(255)
+  imageUrl     String   @db.Text
+  format       String   @db.VarChar(20)
+  width        Int
+  height       Int
+  bytes        Int
+  isPrimary    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ==================== INVENTORY UNIT ====================
+
+model InventoryUnit {
+  id                    String      @id @default(uuid()) @db.Uuid
+  productId             String      @db.Uuid
+  purchaseReceiptItemId String?     @db.Uuid
+  pieceCode             String      @unique @db.VarChar(80)
+  barcode               String?     @unique @db.VarChar(100)
+  status                PieceStatus @default(AVAILABLE)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  product             Product              @relation(fields: [productId], references: [id])
+  purchaseReceiptItem PurchaseReceiptItem? @relation(fields: [purchaseReceiptItemId], references: [id])
+  movements           StockMovement[]
+
+  @@index([productId, status])
+  @@index([purchaseReceiptItemId])
+  @@map("inventory_units")
+}
+
+// ==================== STOCK BATCH ====================
+
+model StockBatch {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  batchCode String   @db.VarChar(80)
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([productId, batchCode])
+  @@map("stock_batches")
+}
+
+// ==================== STOCK MOVEMENT ====================
+
+model StockMovement {
+  id              String            @id @default(uuid()) @db.Uuid
+  productId       String            @db.Uuid
+  inventoryUnitId String?           @db.Uuid
+  movementType    StockMovementType
+  quantity        Int
+  reference       String?           @db.VarChar(100)
+  notes           String?
+  createdAt       DateTime          @default(now())
+
+  product       Product        @relation(fields: [productId], references: [id])
+  inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id])
+
+  @@index([productId, createdAt])
+  @@map("stock_movements")
+}
+
+// ==================== PRODUCT CODE COUNTER ====================
+
+model ProductCodeCounter {
+  shopPrefix   String @db.VarChar(10)
+  categoryCode String @db.VarChar(10)
+  varietyCode  String @db.VarChar(10)
+  lastNumber   Int    @default(0)
+
+  @@id([shopPrefix, categoryCode, varietyCode])
+  @@map("product_code_counters")
+}
+
+// ==================== PIECE CODE COUNTER ====================
+
+model PieceCodeCounter {
+  productId  String @id @db.Uuid
+  lastNumber Int    @default(0)
+
+  @@map("piece_code_counters")
+}
+
+// ==================== SUPPLIER ====================
+
+model Supplier {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(150)
+  phone     String   @db.VarChar(15)
+  email     String?  @db.VarChar(150)
+  address   String?  @db.VarChar(500)
+  gstNumber String?  @db.VarChar(15)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([name])
+  @@index([phone])
+  @@map("suppliers")
+}
+
+// ==================== PURCHASE ORDER ====================
+
+model PurchaseOrder {
+  id           String              @id @default(uuid()) @db.Uuid
+  orderNumber  String              @unique @db.VarChar(50)
+  supplierId   String              @db.Uuid
+  status       PurchaseOrderStatus @default(DRAFT)
+  orderDate    DateTime            @default(now())
+  expectedDate DateTime?
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+  receipts PurchaseReceipt[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+// ==================== PURCHASE ORDER ITEM ====================
+
+model PurchaseOrderItem {
+  id               String   @id @default(uuid()) @db.Uuid
+  purchaseOrderId  String   @db.Uuid
+  productId        String   @db.Uuid
+  orderedQuantity  Int
+  receivedQuantity Int      @default(0)
+  unitCost         Decimal  @db.Decimal(12, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  product       Product               @relation(fields: [productId], references: [id])
+  receipts      PurchaseReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+// ==================== PURCHASE ORDER COUNTER ====================
+
+model PurchaseOrderCounter {
+  shopPrefix String @id @db.VarChar(10)
+  lastNumber Int    @default(0)
+
+  @@map("purchase_order_counters")
+}
+
+// ==================== PURCHASE RECEIPT ====================
+
+
+
+model PurchaseReceipt {
+  id                    String    @id @default(uuid()) @db.Uuid
+  receiptNumber         String    @unique @db.VarChar(50)
+  idempotencyKey        String?   @unique @db.VarChar(100)
+  requestHash           String?   @db.VarChar(64)
+  purchaseOrderId       String    @db.Uuid
+  supplierInvoiceNumber String?   @db.VarChar(100)
+  supplierInvoiceDate   DateTime?
+  receivedAt            DateTime  @default(now())
+  notes                 String?
+  createdAt             DateTime  @default(now())
+
+  purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  items         PurchaseReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@index([receivedAt])
+  @@map("purchase_receipts")
+}
+
+
+
+// ==================== PURCHASE RECEIPT ITEM ====================
+
+model PurchaseReceiptItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  purchaseReceiptId   String   @db.Uuid
+  purchaseOrderItemId String   @db.Uuid
+  productId           String   @db.Uuid
+  receivedQuantity    Int
+  createdAt           DateTime @default(now())
+
+  purchaseReceipt   PurchaseReceipt   @relation(fields: [purchaseReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  product           Product           @relation(fields: [productId], references: [id])
+
+  inventoryUnits InventoryUnit[]
+
+  @@index([purchaseReceiptId])
+  @@index([purchaseOrderItemId])
+  @@index([productId])
+  @@map("purchase_receipt_items")
+}
+
+// ==================== PURCHASE RECEIPT COUNTER ====================
+
+model PurchaseReceiptCounter {
+  shopPrefix String @id @db.VarChar(10)
+  lastNumber Int    @default(0)
+
+  @@map("purchase_receipt_counters")
+}
