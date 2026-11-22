@@ -18,6 +18,16 @@ const createProductHandler: RequestHandler = async (
   res,
   next
 ) => {
+  if (
+    req.authenticatedUser?.role !== "ADMIN" &&
+    req.body !== null &&
+    typeof req.body === "object" &&
+    Object.prototype.hasOwnProperty.call(req.body, "costPrice")
+  ) {
+    res.status(403).json({ success: false, message: "Only ADMIN users may set product cost price" });
+    return;
+  }
+
   // Validate request body
   const validation = createProductSchema.safeParse(req.body);
 
@@ -31,7 +41,7 @@ const createProductHandler: RequestHandler = async (
   }
 
   try {
-    const product = await createProduct(validation.data);
+    const product = await createProduct(validation.data, req.authenticatedUser?.role === "ADMIN");
 
     res.status(201).json({
       success: true,
@@ -43,9 +53,9 @@ const createProductHandler: RequestHandler = async (
   }
 };
 
-const getProducts: RequestHandler = async (_req, res, next) => {
+const getProducts: RequestHandler = async (req, res, next) => {
   try {
-    const products = await fetchProducts();
+    const products = await fetchProducts(req.authenticatedUser?.role === "ADMIN");
 
     res.status(200).json({
       success: true,

@@ -20,15 +20,34 @@ interface CreatePurchaseReceiptInput {
   }[];
 }
 
-const receiptInclude = {
-  purchaseOrder: true,
-  items: {
-    include: {
-      product: true,
-      inventoryUnits: true,
+function receiptResponseInclude(includeCosts: boolean) {
+  return {
+    purchaseOrder: true,
+    items: {
+      include: {
+        product: {
+          select: {
+            id: true,
+            productCode: true,
+            name: true,
+            description: true,
+            categoryId: true,
+            varietyId: true,
+            defaultSellingPrice: true,
+            ...(includeCosts ? { costPrice: true } : {}),
+            gstRate: true,
+            hsnCode: true,
+            inventoryTracking: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        inventoryUnits: true,
+      },
     },
-  },
-} satisfies Prisma.PurchaseReceiptInclude;
+  } satisfies Prisma.PurchaseReceiptInclude;
+}
 
 // Generate receipt number safely using PostgreSQL atomic counter.
 async function generateReceiptNumber(
@@ -72,15 +91,17 @@ function generateRequestHash(
 // Return an existing receipt for a previously used key.
 async function findReceiptByIdempotencyKey(
   idempotencyKey: string,
+  includeCosts: boolean,
 ) {
   return prisma.purchaseReceipt.findUnique({
     where: { idempotencyKey },
-    include: receiptInclude,
+    include: receiptResponseInclude(includeCosts),
   });
 }
 
 export async function createPurchaseReceipt(
   input: CreatePurchaseReceiptInput,
+  includeCosts: boolean,
 ) {
   const requestHash = generateRequestHash(input);
 
@@ -97,7 +118,7 @@ export async function createPurchaseReceipt(
               where: {
                 idempotencyKey: input.idempotencyKey,
               },
-              include: receiptInclude,
+              include: receiptResponseInclude(includeCosts),
             });
 
           if (existingReceipt) {
@@ -376,7 +397,7 @@ export async function createPurchaseReceipt(
           const completeReceipt =
             await tx.purchaseReceipt.findUniqueOrThrow({
               where: { id: receipt.id },
-              include: receiptInclude,
+              include: receiptResponseInclude(includeCosts),
             });
 
           return {
@@ -398,6 +419,7 @@ export async function createPurchaseReceipt(
         const existingReceipt =
           await findReceiptByIdempotencyKey(
             input.idempotencyKey,
+            includeCosts,
           );
 
         if (existingReceipt) {

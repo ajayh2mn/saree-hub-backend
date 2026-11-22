@@ -27,7 +27,10 @@ router.post("/", async (req, res, next) => {
       return;
     }
 
-    const result = await createPurchaseReceipt(validation.data);
+    const result = await createPurchaseReceipt(
+      validation.data,
+      req.authenticatedUser?.role === "ADMIN",
+    );
 
     res.status(result.isDuplicate ? 200 : 201).json({
       success: true,

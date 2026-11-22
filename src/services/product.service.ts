@@ -28,7 +28,7 @@ interface CreateProductInput {
   inventoryTracking?: InventoryTracking | undefined;
 }
 
-export async function createProduct(input: CreateProductInput) {
+export async function createProduct(input: CreateProductInput, includeCostPrice: boolean) {
   return prisma.$transaction(async (tx) => {
     // 1. Verify category
     const category = await tx.category.findUnique({
@@ -84,9 +84,23 @@ export async function createProduct(input: CreateProductInput) {
           connect: { id: variety.id },
         },
       },
-      include: {
-        category: true,
-        variety: true,
+      select: {
+        id: true,
+        productCode: true,
+        name: true,
+        description: true,
+        categoryId: true,
+        varietyId: true,
+        defaultSellingPrice: true,
+        ...(includeCostPrice ? { costPrice: true } : {}),
+        gstRate: true,
+        hsnCode: true,
+        inventoryTracking: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        category: { select: { id: true, code: true, name: true } },
+        variety: { select: { id: true, code: true, name: true } },
       },
     });
 
@@ -94,7 +108,7 @@ export async function createProduct(input: CreateProductInput) {
   });
 }
 
-export async function getProducts() {
+export async function getProducts(includeCostPrice: boolean) {
   return prisma.product.findMany({
     orderBy: {
       name: "asc",
@@ -107,6 +121,7 @@ export async function getProducts() {
       categoryId: true,
       varietyId: true,
       defaultSellingPrice: true,
+      ...(includeCostPrice ? { costPrice: true } : {}),
       gstRate: true,
       hsnCode: true,
       inventoryTracking: true,

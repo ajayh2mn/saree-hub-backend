@@ -12,12 +12,14 @@ import {
   createPurchaseOrderSchema,
   updatePurchaseOrderStatusSchema,
 } from "../validators/purchase-order.validator.js";
+import { requireRole } from "../middleware/role.middleware.js";
+import { z } from "zod";
 
 const router = Router();
 
 // POST /api/purchase-orders
 // Create Purchase Order
-router.post("/", async (req, res, next) => {
+router.post("/", requireRole("ADMIN"), async (req, res, next) => {
   try {
     const validation = createPurchaseOrderSchema.safeParse(req.body);
 
@@ -30,7 +32,7 @@ router.post("/", async (req, res, next) => {
       return;
     }
 
-    const purchaseOrder = await createPurchaseOrder(validation.data);
+    const purchaseOrder = await createPurchaseOrder(validation.data, true);
 
     res.status(201).json({
       success: true,
@@ -57,9 +59,9 @@ router.post("/", async (req, res, next) => {
 
 // GET /api/purchase-orders
 // Get All Purchase Orders
-router.get("/", async (_req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
-    const purchaseOrders = await getAllPurchaseOrders();
+    const purchaseOrders = await getAllPurchaseOrders(req.authenticatedUser?.role === "ADMIN");
 
     res.status(200).json({
       success: true,
@@ -75,7 +77,7 @@ router.get("/", async (_req, res, next) => {
 // Get Purchase Order By ID
 router.get("/:id", async (req, res, next) => {
   try {
-    const purchaseOrder = await getPurchaseOrderById(req.params.id);
+    const purchaseOrder = await getPurchaseOrderById(req.params.id, req.authenticatedUser?.role === "ADMIN");
 
     if (!purchaseOrder) {
       res.status(404).json({
@@ -96,7 +98,13 @@ router.get("/:id", async (req, res, next) => {
 
 // PATCH /api/purchase-orders/:id/status
 // Update Purchase Order Status
-router.patch("/:id/status", async (req, res, next) => {
+router.patch("/:id/status", requireRole("ADMIN"), async (req, res, next) => {
+  const idValidation = z.string().uuid().safeParse(req.params.id);
+  if (!idValidation.success) {
+    res.status(400).json({ success: false, message: "Invalid purchase order ID" });
+    return;
+  }
+
   try {
     const validation = updatePurchaseOrderStatusSchema.safeParse(req.body);
 
@@ -110,8 +118,9 @@ router.patch("/:id/status", async (req, res, next) => {
     }
 
     const updatedOrder = await updatePurchaseOrderStatus(
-      req.params.id,
-      validation.data.status
+      idValidation.data,
+      validation.data.status,
+      true,
     );
 
     res.status(200).json({

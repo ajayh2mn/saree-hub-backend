@@ -13,6 +13,42 @@ interface CreatePurchaseOrderInput {
   }[];
 }
 
+function purchaseOrderResponseInclude(includeCosts: boolean) {
+  return {
+    supplier: true,
+    items: {
+      select: {
+        id: true,
+        purchaseOrderId: true,
+        productId: true,
+        orderedQuantity: true,
+        receivedQuantity: true,
+        ...(includeCosts ? { unitCost: true } : {}),
+        createdAt: true,
+        updatedAt: true,
+        product: {
+          select: {
+            id: true,
+            productCode: true,
+            name: true,
+            description: true,
+            categoryId: true,
+            varietyId: true,
+            defaultSellingPrice: true,
+            ...(includeCosts ? { costPrice: true } : {}),
+            gstRate: true,
+            hsnCode: true,
+            inventoryTracking: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    },
+  };
+}
+
 async function generatePurchaseOrderNumber(
   tx: Prisma.TransactionClient,
 ): Promise<string> {
@@ -35,7 +71,7 @@ async function generatePurchaseOrderNumber(
   return `KMA-PO-${String(row.lastNumber).padStart(4, "0")}`;
 }
 
-export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
+export async function createPurchaseOrder(input: CreatePurchaseOrderInput, includeCosts: boolean) {
   return prisma.$transaction(async (tx) => {
     // 1. Verify supplier
     const supplier = await tx.supplier.findUnique({
@@ -78,55 +114,35 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput) {
           })),
         },
       },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      include: purchaseOrderResponseInclude(includeCosts),
     });
 
     return purchaseOrder;
   });
 }
 
-export async function getAllPurchaseOrders() {
+export async function getAllPurchaseOrders(includeCosts: boolean) {
   return prisma.purchaseOrder.findMany({
     orderBy: {
       createdAt: "desc",
     },
-    include: {
-      supplier: true,
-      items: {
-        include: {
-          product: true,
-        },
-      },
-    },
+    include: purchaseOrderResponseInclude(includeCosts),
   });
 }
 
-export async function getPurchaseOrderById(id: string) {
+export async function getPurchaseOrderById(id: string, includeCosts: boolean) {
   return prisma.purchaseOrder.findUnique({
     where: {
       id,
     },
-    include: {
-      supplier: true,
-      items: {
-        include: {
-          product: true,
-        },
-      },
-    },
+    include: purchaseOrderResponseInclude(includeCosts),
   });
 }
 
 export async function updatePurchaseOrderStatus(
   id: string,
   newStatus: "ORDERED" | "CANCELLED",
+  includeCosts: boolean,
 ) {
   return prisma.$transaction(async (tx) => {
     const purchaseOrder = await tx.purchaseOrder.findUnique({
@@ -147,14 +163,7 @@ export async function updatePurchaseOrderStatus(
       data: {
         status: newStatus as PurchaseOrderStatus,
       },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
+      include: purchaseOrderResponseInclude(includeCosts),
     });
 
     return updatedOrder;

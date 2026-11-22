@@ -10,6 +10,8 @@ import inventoryRoutes from "./routes/inventory.routes.js";
 import supplierRoutes from "./routes/supplier.routes.js";
 import purchaseOrderRoutes from "./routes/purchase-order.routes.js";
 import purchaseReceiptRoutes from "./routes/purchase-receipt.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import { requireAuthentication } from "./middleware/auth.middleware.js";
 
 const app = express();
 
@@ -34,6 +36,7 @@ const apiLimiter = rateLimit({
 });
 
 app.use("/api", apiLimiter);
+app.use("/api/auth", authRoutes);
 
 // Health check
 app.get("/health", (_req, res) => {
@@ -44,11 +47,13 @@ app.get("/health", (_req, res) => {
 });
 
 // Product routes
-app.use("/api/products", productRoutes);
-app.use("/api/categories", categoryRoutes);
-app.use("/api/varieties", varietyRoutes);
-app.use("/api/inventory", inventoryRoutes);
-app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/products", requireAuthentication, productRoutes);
+app.use("/api/categories", requireAuthentication, categoryRoutes);
+app.use("/api/varieties", requireAuthentication, varietyRoutes);
+app.use("/api/inventory", requireAuthentication, inventoryRoutes);
+app.use("/api/purchase-orders", requireAuthentication, purchaseOrderRoutes);
+app.use("/api/suppliers", requireAuthentication, supplierRoutes);
+app.use("/api/purchase-receipts", requireAuthentication, purchaseReceiptRoutes);
 
 // Global error handler
 app.use(
@@ -66,9 +71,5 @@ app.use(
     });
   },
 );
-
-app.use("/api/suppliers", supplierRoutes);
-
-app.use("/api/purchase-receipts", purchaseReceiptRoutes);
 
 export default app;

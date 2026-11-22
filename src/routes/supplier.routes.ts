@@ -8,11 +8,13 @@ import {
 
 import { updateSupplierSchema } from "../validators/supplier.validator.js";
 import { updateSupplierStatus } from "../services/supplier.service.js";
+import { requireRole } from "../middleware/role.middleware.js";
+import { z } from "zod";
 
 const router = Router();
 
 // Register supplier
-router.post("/", async (req, res, next) => {
+router.post("/", requireRole("ADMIN"), async (req, res, next) => {
   try {
     const validation = createSupplierSchema.safeParse(req.body);
 
@@ -52,20 +54,21 @@ router.get("/", async (_req, res, next) => {
   }
 });
 
-router.patch("/:id", async (req, res, next) => {
+router.patch("/:id", requireRole("ADMIN"), async (req, res, next) => {
   try {
+    const idValidation = z.string().uuid().safeParse(req.params.id);
     const validation = updateSupplierSchema.safeParse(req.body);
 
-    if (!validation.success) {
+    if (!idValidation.success || !validation.success) {
       res.status(400).json({
         success: false,
-        message: "Invalid supplier data",
-        errors: validation.error.flatten(),
+        message: "Invalid supplier ID or data",
+        errors: validation.success ? undefined : validation.error.flatten(),
       });
       return;
     }
 
-    const result = await updateSupplier(req.params.id, validation.data);
+    const result = await updateSupplier(idValidation.data, validation.data);
 
     res.status(200).json({
       success: true,
@@ -77,19 +80,20 @@ router.patch("/:id", async (req, res, next) => {
   }
 });
 
-router.patch("/:id/status", async (req, res, next) => {
+router.patch("/:id/status", requireRole("ADMIN"), async (req, res, next) => {
   try {
+    const idValidation = z.string().uuid().safeParse(req.params.id);
     const { isActive } = req.body;
 
-    if (typeof isActive !== "boolean") {
+    if (!idValidation.success || typeof isActive !== "boolean") {
       res.status(400).json({
         success: false,
-        message: "isActive must be true or false",
+        message: "Invalid supplier ID or isActive must be true or false",
       });
       return;
     }
 
-    const result = await updateSupplierStatus(req.params.id, isActive);
+    const result = await updateSupplierStatus(idValidation.data, isActive);
 
     res.status(200).json({
       success: true,
